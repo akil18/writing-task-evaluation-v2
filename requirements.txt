@@ -1,0 +1,7 @@
+gradio
+fastapi
+python-dotenv
+langchain
+langchain_groq
+uvicorn
+pydantic
