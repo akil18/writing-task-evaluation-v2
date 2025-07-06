@@ -1,7 +1,7 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from utils.inference import evaluate
-from utils.inference import classify_writing_task
+from utils.inference import evaluate, classify_writing_task
 from utils.criteria import get_criteria
 from utils.tools import word_count_checker
 import gradio as gr
@@ -9,6 +9,21 @@ from app.gradio_app import gradio_app
 
 app = FastAPI()
 
+# 🔐 CORS setup
+origins = [
+    "http://localhost:3000",   # frontend Vite dev server
+    "http://127.0.0.1:3000"
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,         # restrict to your dev client
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# 🧾 Request & Response Models
 class Request(BaseModel):
     writing_sample: str
     writing_question: str
@@ -17,16 +32,23 @@ class Request(BaseModel):
 class Response(BaseModel):
     evaluation: dict
 
+# 📬 POST /evaluate endpoint
 @app.post("/evaluate", response_model=Response)
 async def evaluate_api(prompt: Request):
     criteria_string = get_criteria(prompt.task_type)
     test_variant = classify_writing_task(prompt.writing_question)
     word_count = word_count_checker(prompt.writing_sample)
     try:
-        response = evaluate(prompt.writing_sample, prompt.writing_question, criteria_string, test_variant, word_count)
+        response = evaluate(
+            prompt.writing_sample,
+            prompt.writing_question,
+            criteria_string,
+            test_variant,
+            word_count
+        )
         return {"evaluation": response}
     except Exception as e:
         return {"error": str(e)}
 
-# Create the Gradio interface
+# 🎛 Mount Gradio at /gradio
 app = gr.mount_gradio_app(app, gradio_app, path="/gradio")

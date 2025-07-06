@@ -1,7 +1,7 @@
 import json
 from utils.llm import LLM
 from langchain_core.prompts import PromptTemplate
-
+import re
 
 def build_prompt_template(writing_sample: str, writing_question: str, criteria_string: str, test_variant: str, word_count: int) -> PromptTemplate:
     """
@@ -116,7 +116,10 @@ def invoke_llm(prompt_template: PromptTemplate, writing_sample: str = "", writin
 
         if hasattr(response, 'content'):
             response_text = response.content.strip()
-            response_text = response_text.removeprefix("```json").removesuffix("```").strip()
+
+            # Remove code block formatting like ```json or ```python etc.
+            response_text = re.sub(r"^```(?:json)?", "", response_text, flags=re.IGNORECASE).strip()
+            response_text = re.sub(r"```$", "", response_text).strip()
 
             try:
                 return json.loads(response_text)
@@ -169,4 +172,4 @@ def evaluate(writing_sample: str, writing_question: str, criteria_string: str, t
         dict: The evaluation results as a dictionary.
     """
     prompt_template = build_prompt_template(writing_sample, writing_question, criteria_string, test_variant, word_count)
-    return invoke_llm(prompt_template, writing_sample, writing_question, criteria_string)
+    return invoke_llm(prompt_template, writing_sample, writing_question, criteria_string, test_variant)
