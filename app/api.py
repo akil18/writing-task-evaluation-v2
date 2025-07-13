@@ -11,13 +11,14 @@ app = FastAPI()
 
 # 🔐 CORS setup
 origins = [
-    "http://localhost:3000",   # frontend Vite dev server
-    "http://127.0.0.1:3000"
+    "http://localhost:3000",  
+    "http://127.0.0.1:3000",
+    "https://writing-task-app.netlify.app"
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,         # restrict to your dev client
+    allow_origins=origins,     
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
