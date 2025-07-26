@@ -2,6 +2,7 @@ import json
 from utils.llm import LLM
 from langchain_core.prompts import PromptTemplate
 import re
+from requests.exceptions import HTTPError
 
 def build_prompt_template(writing_sample: str, writing_question: str, criteria_string: str, test_variant: str, word_count: int) -> PromptTemplate:
     """
@@ -99,9 +100,10 @@ def invoke_llm(prompt_template: PromptTemplate, writing_sample: str = "", writin
         writing_sample (str, optional): The writing sample to evaluate. Default is "".
         writing_question (str, optional): The writing question to evaluate. Default is "".
         criteria_string (str, optional): The evaluation criteria. Default is "".
+        test_variant (str, optional): The test variant (Academic or General Training). Default is "".
 
     Returns:
-        dict: The processed response from the LLM.
+        dict: The processed response from the LLM, or a structured error dictionary if invocation fails.
     """
     llm = LLM().get_groq_llm()
     chain_evaluation = prompt_template | llm
@@ -114,25 +116,40 @@ def invoke_llm(prompt_template: PromptTemplate, writing_sample: str = "", writin
             "test_variant": test_variant,
         })
 
-        if hasattr(response, 'content'):
-            response_text = response.content.strip()
+        if not response or not hasattr(response, 'content') or not response.content:
+            return {
+                "error": "LLM did not return a valid response. Possibly due to usage limits or a network issue.",
+                "code": "NO_CONTENT"
+            }
 
-            # Remove code block formatting like ```json or ```python etc.
-            response_text = re.sub(r"^```(?:json)?", "", response_text, flags=re.IGNORECASE).strip()
-            response_text = re.sub(r"```$", "", response_text).strip()
+        response_text = response.content.strip()
+        response_text = re.sub(r"^```(?:json)?", "", response_text, flags=re.IGNORECASE).strip()
+        response_text = re.sub(r"```$", "", response_text).strip()
 
-            try:
-                return json.loads(response_text)
-            except json.JSONDecodeError:
-                return {
-                    "warning": "Response was not valid JSON. Returning raw output.",
-                    "content": response_text
-                }
+        try:
+            return json.loads(response_text)
+        except json.JSONDecodeError:
+            return {
+                "warning": "Response was not valid JSON. Returning raw output.",
+                "content": response_text
+            }
+
+    except HTTPError as http_err:
+        if http_err.response.status_code == 429:
+            return {
+                "error": "LLM usage limit exceeded. Please wait or upgrade your quota.",
+                "code": "LIMIT_EXCEEDED"
+            }
         else:
-            raise ValueError("LLM response does not contain `content` field.")
-
+            return {
+                "error": f"HTTP error occurred: {str(http_err)}",
+                "code": "HTTP_ERROR"
+            }
     except Exception as e:
-        raise RuntimeError(f"Error during LLM invocation: {str(e)}")
+        return {
+            "error": f"Unexpected error during LLM invocation: {str(e)}",
+            "code": "INTERNAL_ERROR"
+        }
 
 
 def classify_writing_task(writing_question: str) -> str:
